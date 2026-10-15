@@ -1,15 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PaymentService.Domain;
-using DomainEventLog = PaymentService.Domain.EventLog;
 
 namespace PaymentService.Infrastructure.Persistance;
 
 public class PaymentDbContext(DbContextOptions<PaymentDbContext> options) : DbContext(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
-    public DbSet<Subscription> Subscriptions => Set<Subscription>();
-    public DbSet<DomainEventLog> EventLogs => Set<DomainEventLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

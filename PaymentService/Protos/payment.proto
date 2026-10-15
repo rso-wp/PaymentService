@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option csharp_namespace = "PaymentService.Protos";
+
+package payment;
+
+service Payment {
+  // Starts a Stripe subscription for a user.
+  rpc TryMakeSubscription (TryMakeSubscriptionRequest) returns (TryMakeSubscriptionResponse);
+}
+
+message TryMakeSubscriptionRequest {
+  string user_id = 1;          // Guid
+  string stripe_price_id = 2;
+  string service_id = 3;       // Guid
+}
+
+message TryMakeSubscriptionResponse {
+  string stripe_subscription_id = 1;
+  string status = 2;
+}

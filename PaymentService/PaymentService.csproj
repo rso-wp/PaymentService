@@ -16,12 +16,13 @@
     </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.24.2-preview.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Stripe.net" Version="53.0.0" />
     <PackageReference Include="WolverineFx" Version="6.50.0" />
     <PackageReference Include="WolverineFx.Marten" Version="6.50.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Protos\" />
+    <Protobuf Include="Protos\payment.proto" GrpcServices="Server" />
   </ItemGroup>
 
 </Project>

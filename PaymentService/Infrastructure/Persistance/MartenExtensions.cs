@@ -1,4 +1,8 @@
 using Marten;
+using PaymentService.Features.StripeWebhooks;
+using Wolverine;
+using Wolverine.ErrorHandling;
+using Wolverine.Marten;
 using JasperFx.Events.Projections;
 using PaymentService.Domain;
 
@@ -26,8 +30,24 @@ public static class MartenExtensions
             options.Schema.For<Subscription>().Index(s => s.UserId);
             options.Schema.For<Subscription>().Index(s => s.ServiceId);
             options.Schema.For<Subscription>().Index(s => s.StripeSubscriptionId!, x => x.IsUnique = true);
-        }).UseLightweightSessions();
+
+            options.Schema.For<ProcessedStripeEvent>();
+        })
+        .UseLightweightSessions()
+        // Wolverine's outbox/inbox live in the same Postgres database, so Marten changes and messages commit together.
+        .IntegrateWithWolverine();
 
         return services;
+    }
+
+    public static void AddPaymentMessaging(this WolverineOptions options)
+    {
+        options.Policies.AutoApplyTransactions();
+        options.Policies.UseDurableLocalQueues();
+
+        // Handlers call Stripe / NATS; keep retrying transient failures instead of dead-lettering.
+        options.OnException<Exception>()
+            .RetryWithCooldown(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30))
+            .Then.ScheduleRetry(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15));
     }
 }

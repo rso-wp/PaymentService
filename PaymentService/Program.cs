@@ -1,19 +1,27 @@
 using Microsoft.EntityFrameworkCore;
 using PaymentService.Features.AddPaymentMethod;
+using PaymentService.Features.Customers;
 using PaymentService.Features.StartSubscription;
+using PaymentService.Features.StripeWebhooks;
 using PaymentService.Infrastructure.Auth;
+using PaymentService.Infrastructure.Messaging;
 using PaymentService.Infrastructure.Persistance;
 using PaymentService.Infrastructure.StripeIntegration;
+using Wolverine;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddPaymentPersistence(builder.Configuration);
 builder.Services.AddPaymentEventStore(builder.Configuration);
-builder.Services.AddStripeIntegration(builder.Configuration);
+builder.Services.AddStripeIntegration(builder.Configuration, builder.Environment);
 builder.Services.AddEntraAuth(builder.Configuration, builder.Environment);
 builder.Services.AddFrontendCors(builder.Configuration);
 builder.Services.AddGrpc();
 builder.Services.AddScoped<StripeCustomerResolver>();
+builder.Services.AddNats(builder.Configuration);
+builder.Services.AddHostedService<UserCreatedConsumer>();
+
+builder.Host.UseWolverine(opts => opts.AddPaymentMessaging());
 
 var app = builder.Build();
 
@@ -30,5 +38,6 @@ app.UseAuthorization();
 
 app.MapGrpcService<PaymentGrpcService>();
 app.MapAddPaymentMethod();
+app.MapStripeWebhooks();
 
 await app.RunAsync();

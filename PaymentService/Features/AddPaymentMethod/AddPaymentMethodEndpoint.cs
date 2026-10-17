@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using PaymentService.Features.Customers;
 using PaymentService.Infrastructure.Auth;
 using Stripe;
 

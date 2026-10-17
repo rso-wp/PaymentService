@@ -17,6 +17,7 @@ public static class StripeExtensions
 
         services.AddTransient<CustomerService>();
         services.AddTransient<SubscriptionService>();
+        services.AddTransient<SetupIntentService>();
 
         return services;
     }

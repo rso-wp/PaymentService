@@ -11,4 +11,7 @@ public class StripeOptions
 
     [Required]
     public string WebhookSecret { get; set; } = "";
+
+    /// <summary>Development only: use <see cref="FakeStripeGateway"/> instead of calling Stripe.</summary>
+    public bool UseFake { get; set; }
 }

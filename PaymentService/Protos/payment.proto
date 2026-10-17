@@ -15,12 +15,13 @@ service Payment {
 message TryMakeSubscriptionRequest {
   string user_id = 1;          // Guid
   string stripe_price_id = 2;
-  string service_id = 3;       // Guid
+  string service_id = 3;       // e.g. "wordpress"
 }
 
 message TryMakeSubscriptionResponse {
-  string stripe_subscription_id = 1;
-  string status = 2;
+  string stripe_subscription_id = 1;  // set when status is "SUCCESSFUL"
+  string status = 2;                  // "SUCCESSFUL" or "FAILED" (declined / no card); infra errors are gRPC errors
+  string reason = 3;                  // why it failed, safe to show the user
 }
 
 message StopSubscriptionRequest {

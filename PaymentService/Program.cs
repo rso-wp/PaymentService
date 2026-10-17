@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddPaymentPersistence(builder.Configuration);
 builder.Services.AddPaymentEventStore(builder.Configuration);
 builder.Services.AddStripeIntegration(builder.Configuration);
-builder.Services.AddEntraAuth(builder.Configuration);
+builder.Services.AddEntraAuth(builder.Configuration, builder.Environment);
 builder.Services.AddFrontendCors(builder.Configuration);
 builder.Services.AddGrpc();
 builder.Services.AddScoped<StripeCustomerResolver>();

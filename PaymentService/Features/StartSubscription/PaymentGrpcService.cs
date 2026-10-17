@@ -21,6 +21,17 @@ public class PaymentGrpcService(ILogger<PaymentGrpcService> logger) : Payment.Pa
         });
     }
 
+    // TODO: cancel the Stripe subscription and append SubscriptionCanceled.
+    public override Task<StopSubscriptionResponse> StopSubscription(
+        StopSubscriptionRequest request,
+        ServerCallContext context)
+    {
+        logger.LogInformation(
+            "StopSubscription called. StripeSubscriptionId: {StripeSubscriptionId}", request.StripeSubscriptionId);
+
+        return Task.FromResult(new StopSubscriptionResponse { Status = "SUCCESSFUL" });
+    }
+
     // Stripe subscription ids look like "sub_" followed by 24 alphanumeric characters.
     private static string GenerateFakeSubscriptionId()
     {

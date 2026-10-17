@@ -7,6 +7,9 @@ package payment;
 service Payment {
   // Starts a Stripe subscription for a user.
   rpc TryMakeSubscription (TryMakeSubscriptionRequest) returns (TryMakeSubscriptionResponse);
+
+  // Cancels a subscription started by TryMakeSubscription.
+  rpc StopSubscription (StopSubscriptionRequest) returns (StopSubscriptionResponse);
 }
 
 message TryMakeSubscriptionRequest {
@@ -18,4 +21,12 @@ message TryMakeSubscriptionRequest {
 message TryMakeSubscriptionResponse {
   string stripe_subscription_id = 1;
   string status = 2;
+}
+
+message StopSubscriptionRequest {
+  string stripe_subscription_id = 1;
+}
+
+message StopSubscriptionResponse {
+  string status = 1;           // "SUCCESSFUL" on success
 }

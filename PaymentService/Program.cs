@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PaymentService.Features.AddPaymentMethod;
 using PaymentService.Features.Customers;
+using PaymentService.Features.PaymentMethods;
 using PaymentService.Features.StartSubscription;
 using PaymentService.Features.StripeWebhooks;
 using PaymentService.Infrastructure.Auth;
@@ -38,6 +39,7 @@ app.UseAuthorization();
 
 app.MapGrpcService<PaymentGrpcService>();
 app.MapAddPaymentMethod();
+app.MapPaymentMethods();
 app.MapStripeWebhooks();
 
 await app.RunAsync();

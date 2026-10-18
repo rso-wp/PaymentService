@@ -41,8 +41,18 @@ public class PaymentGrpcService(
         {
             var customerId = await customers.GetOrCreateStripeCustomerIdAsync(userId, email: null, ct);
 
-            var paymentMethodId = await stripe.FindPaymentMethodAsync(customerId, ct)
-                ?? throw new StripeGatewayException("No payment method on file. Add a card first.");
+            string paymentMethodId;
+            if (string.IsNullOrEmpty(request.PaymentMethodId))
+            {
+                paymentMethodId = await stripe.FindPaymentMethodAsync(customerId, ct)
+                    ?? throw new StripeGatewayException("No payment method on file. Add a card first.");
+            }
+            else
+            {
+                // Only the user's own cards can be charged.
+                paymentMethodId = (await stripe.GetCardAsync(customerId, request.PaymentMethodId, ct))?.Id
+                    ?? throw new StripeGatewayException("That card is not on your account.");
+            }
 
             var stripeSubscriptionId = await stripe.CreateSubscriptionAsync(
                 subscriptionId, customerId, request.StripePriceId, paymentMethodId,

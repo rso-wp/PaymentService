@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 namespace PaymentService.Infrastructure.Auth;
 
@@ -8,27 +8,29 @@ public static class AuthExtensions
 {
     public const string FrontendCorsPolicy = "Frontend";
 
-    public static IServiceCollection AddEntraAuth(
-        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    /// <summary>
+    /// Bearer validation of UserService's tokens. The signing key comes from UserService's discovery document
+    /// (`Auth:MetadataAddress`, cluster-internal http) and is refreshed when it changes.
+    /// </summary>
+    public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration configuration)
     {
-        if (environment.IsDevelopment() && configuration.GetValue<bool>("DevAuth:Enabled"))
-        {
-            services.AddAuthentication(DevAuthHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, null);
-            services.AddAuthorization();
-            return services;
-        }
-
-        var section = configuration.GetSection("EntraId");
+        var section = configuration.GetSection("Auth");
+        string Required(string key) => section[key] is { Length: > 0 } value
+            ? value
+            : throw new InvalidOperationException($"'Auth:{key}' is not configured.");
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                options.Authority = section["Authority"]
-                    ?? throw new InvalidOperationException("'EntraId:Authority' is not configured.");
-                options.Audience = section["Audience"]
-                    ?? throw new InvalidOperationException("'EntraId:Audience' is not configured.");
-                options.MapInboundClaims = false; // keep raw claim names (oid, email, ...)
+                options.MetadataAddress = Required("MetadataAddress");
+                options.RequireHttpsMetadata = false; // UserService is reached inside the cluster / on localhost
+                options.MapInboundClaims = false; // keep raw claim names (sub, email, ...)
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidIssuer = Required("Issuer"),
+                    ValidAudience = Required("Audience"),
+                    ValidAlgorithms = [SecurityAlgorithms.RsaSha256]
+                };
             });
         services.AddAuthorization();
 
@@ -45,17 +47,10 @@ public static class AuthExtensions
         return services;
     }
 
-    public static Guid GetUserId(this ClaimsPrincipal principal)
-    {
-        var oid = principal.FindFirstValue("oid")
-            ?? principal.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
-        return Guid.TryParse(oid, out var id)
+    public static Guid GetUserId(this ClaimsPrincipal principal) =>
+        Guid.TryParse(principal.FindFirstValue("sub"), out var id)
             ? id
-            : throw new InvalidOperationException("Token has no valid 'oid' claim.");
-    }
+            : throw new InvalidOperationException("Token has no valid 'sub' claim.");
 
-    public static string? GetEmail(this ClaimsPrincipal principal) =>
-        principal.FindFirstValue("email")
-        ?? principal.FindFirstValue("preferred_username")
-        ?? principal.FindFirstValue("upn");
+    public static string? GetEmail(this ClaimsPrincipal principal) => principal.FindFirstValue("email");
 }

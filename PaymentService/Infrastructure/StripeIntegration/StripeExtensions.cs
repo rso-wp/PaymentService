@@ -22,7 +22,10 @@ public static class StripeExtensions
         services.AddTransient<PaymentMethodService>();
 
         if (environment.IsDevelopment() && configuration.GetValue<bool>($"{StripeOptions.SectionName}:UseFake"))
-            services.AddSingleton<IStripeGateway, FakeStripeGateway>();
+        {
+            services.AddSingleton<FakeStripeGateway>();
+            services.AddSingleton<IStripeGateway>(sp => sp.GetRequiredService<FakeStripeGateway>());
+        }
         else
             services.AddTransient<IStripeGateway, StripeGateway>();
 

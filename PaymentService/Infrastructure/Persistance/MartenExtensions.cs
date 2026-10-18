@@ -32,6 +32,7 @@ public static class MartenExtensions
             options.Schema.For<Subscription>().Index(s => s.StripeSubscriptionId!, x => x.IsUnique = true);
 
             options.Schema.For<ProcessedStripeEvent>();
+            options.Schema.For<StripeIntegration.FakeCard>().Index(c => c.CustomerId);
         })
         .UseLightweightSessions()
         // Wolverine's outbox/inbox live in the same Postgres database, so Marten changes and messages commit together.

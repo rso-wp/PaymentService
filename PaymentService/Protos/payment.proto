@@ -16,6 +16,7 @@ message TryMakeSubscriptionRequest {
   string user_id = 1;          // Guid
   string stripe_price_id = 2;
   string service_id = 3;       // e.g. "wordpress"
+  string payment_method_id = 4;  // card to charge (must belong to the user); empty = default / latest card
 }
 
 message TryMakeSubscriptionResponse {

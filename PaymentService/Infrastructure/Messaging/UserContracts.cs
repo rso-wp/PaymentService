@@ -11,5 +11,5 @@ public static class UserSubjects
     public const string Created = "users.events.created";
 }
 
-/// <summary>A user signed in for the first time. <see cref="UserId"/> is the Entra oid.</summary>
+/// <summary>A user signed up. <see cref="UserId"/> is the user id (token `sub`) in every service.</summary>
 public record UserCreated(Guid UserId, string Email);

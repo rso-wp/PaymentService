@@ -11,7 +11,9 @@ public static class StripeWebhookEndpoint
     public static readonly HashSet<string> HandledTypes =
     [
         EventTypes.InvoicePaymentFailed,
-        EventTypes.CustomerSubscriptionDeleted
+        EventTypes.CustomerSubscriptionDeleted,
+        // Status unpaid / past_due / canceled: covers Stripe billing settings that mark a subscription instead of cancelling it.
+        EventTypes.CustomerSubscriptionUpdated
     ];
 
     /// <summary>

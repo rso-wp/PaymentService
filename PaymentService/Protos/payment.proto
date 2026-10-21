@@ -5,8 +5,11 @@ option csharp_namespace = "PaymentService.Protos";
 package payment;
 
 service Payment {
-  // Starts a Stripe subscription for a user.
+  // Starts a Stripe subscription for a user. A repeated call with the same request_id returns the first call's outcome.
   rpc TryMakeSubscription (TryMakeSubscriptionRequest) returns (TryMakeSubscriptionResponse);
+
+  // What became of a TryMakeSubscription whose answer the caller never got (timeout, crash). Never starts a subscription.
+  rpc ResolveSubscription (ResolveSubscriptionRequest) returns (TryMakeSubscriptionResponse);
 
   // Cancels a subscription started by TryMakeSubscription.
   rpc StopSubscription (StopSubscriptionRequest) returns (StopSubscriptionResponse);
@@ -17,12 +20,18 @@ message TryMakeSubscriptionRequest {
   string stripe_price_id = 2;
   string service_id = 3;       // e.g. "wordpress"
   string payment_method_id = 4;  // card to charge (must belong to the user); empty = default / latest card
+  string request_id = 5;       // Guid chosen by the caller (the subscription id): a repeated call never charges twice
 }
 
 message TryMakeSubscriptionResponse {
   string stripe_subscription_id = 1;  // set when status is "SUCCESSFUL"
-  string status = 2;                  // "SUCCESSFUL" or "FAILED" (declined / no card); infra errors are gRPC errors
+  string status = 2;                  // "SUCCESSFUL", "FAILED" (declined / no card) or, from ResolveSubscription only,
+                                      // "PENDING" (still being decided: ask again later); infra errors are gRPC errors
   string reason = 3;                  // why it failed, safe to show the user
+}
+
+message ResolveSubscriptionRequest {
+  string request_id = 1;       // request_id of the TryMakeSubscription call
 }
 
 message StopSubscriptionRequest {

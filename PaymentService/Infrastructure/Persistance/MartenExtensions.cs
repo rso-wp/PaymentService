@@ -33,6 +33,7 @@ public static class MartenExtensions
 
             options.Schema.For<ProcessedStripeEvent>();
             options.Schema.For<StripeIntegration.FakeCard>().Index(c => c.CustomerId);
+            options.Schema.For<StripeIntegration.FakeSubscription>().Index(s => s.CustomerId);
         })
         .UseLightweightSessions()
         // Wolverine's outbox/inbox live in the same Postgres database, so Marten changes and messages commit together.
@@ -46,9 +47,11 @@ public static class MartenExtensions
         options.Policies.AutoApplyTransactions();
         options.Policies.UseDurableLocalQueues();
 
-        // Handlers call Stripe / NATS; keep retrying transient failures instead of dead-lettering.
+        // Handlers call Stripe / NATS. Their messages must never be lost (a webhook is acknowledged to Stripe before it is
+        // handled, so Stripe does not send it again): retry for as long as it takes, every 15 minutes in the end, instead of
+        // dead-lettering.
         options.OnException<Exception>()
             .RetryWithCooldown(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30))
-            .Then.ScheduleRetry(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15));
+            .Then.ScheduleRetryIndefinitely(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15));
     }
 }

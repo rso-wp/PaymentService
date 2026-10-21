@@ -52,7 +52,8 @@ public class Subscription
     public record SubscriptionStartFailed(string Reason);
     /// <summary>StripeEventId is set when the cancel came from a Stripe webhook (idempotency), null for a user cancel.</summary>
     public record SubscriptionCanceled(string? StripeEventId);
-    public record SubscriptionPaymentFailed(string StripeEventId);
+    /// <summary>StripeEventId is null when the reconciliation (not a webhook) found the unpaid subscription.</summary>
+    public record SubscriptionPaymentFailed(string? StripeEventId);
 }
 
 public enum SubscriptionStatus

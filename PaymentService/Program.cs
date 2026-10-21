@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PaymentService.Features.AddPaymentMethod;
 using PaymentService.Features.Customers;
 using PaymentService.Features.PaymentMethods;
+using PaymentService.Features.Reconciliation;
 using PaymentService.Features.StartSubscription;
 using PaymentService.Features.StripeWebhooks;
 using PaymentService.Infrastructure.ApiDocs;
@@ -26,6 +27,7 @@ builder.Services.AddServiceHealthChecks<PaymentDbContext>();
 builder.Services.AddObservability("payment-service");
 builder.Services.AddApiDocs("PaymentService API");
 builder.Services.AddHostedService<UserCreatedConsumer>();
+builder.Services.AddHostedService<SubscriptionReconciler>();
 
 builder.Host.UseWolverine(opts => opts.AddPaymentMessaging());
 
@@ -38,6 +40,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
     var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
     await db.Database.MigrateAsync();
 }
+
+app.LogStripeProblems();
 
 app.UseCors();
 app.UseAuthentication();

@@ -1,9 +1,9 @@
+using System.Text.Json;
 using Marten;
 using PaymentService.Domain;
 using PaymentService.Infrastructure.Messaging;
 using PaymentService.Infrastructure.StripeIntegration;
 using Stripe;
-using static PaymentService.Domain.Subscription;
 
 namespace PaymentService.Features.StripeWebhooks;
 
@@ -34,12 +34,26 @@ public static class StripeWebhookHandler
 
         var stripeEvent = EventUtility.ParseEvent(message.Json, throwOnApiVersionMismatch: false);
 
-        var stripeSubscriptionId = stripeEvent.Data.Object switch
+        // true: a payment failed; false: cancelled in Stripe; null: nothing that ends the subscription.
+        bool? paymentFailed = message.Type switch
         {
-            Invoice invoice => invoice.Parent?.SubscriptionDetails?.SubscriptionId,
-            Stripe.Subscription stripeSubscription => stripeSubscription.Id,
+            EventTypes.InvoicePaymentFailed => true,
+            EventTypes.CustomerSubscriptionDeleted => false,
+            EventTypes.CustomerSubscriptionUpdated => (stripeEvent.Data.Object as Stripe.Subscription)?.Status switch
+            {
+                StripeSubscriptionStatus.Canceled => false,
+                { } status when StripeSubscriptionStatus.IsUnpaid(status) => true,
+                _ => null
+            },
             _ => null
         };
+        if (paymentFailed is null)
+        {
+            logger.LogDebug("Stripe event {EventId} ({Type}) does not end a subscription", message.EventId, message.Type);
+            return null;
+        }
+
+        var stripeSubscriptionId = SubscriptionIdOf(stripeEvent, message.Json);
         if (string.IsNullOrEmpty(stripeSubscriptionId))
         {
             logger.LogInformation("Stripe event {EventId} ({Type}) is not about a subscription", message.EventId, message.Type);
@@ -55,22 +69,37 @@ public static class StripeWebhookHandler
             return null;
         }
 
-        string reason;
-        if (message.Type == EventTypes.InvoicePaymentFailed)
-        {
-            await stripe.CancelSubscriptionAsync(stripeSubscriptionId, ct);
-            session.Events.Append(subscription.Id, new SubscriptionPaymentFailed(message.EventId));
-            reason = SubscriptionEnded.PaymentFailed;
-        }
-        else
-        {
-            session.Events.Append(subscription.Id, new SubscriptionCanceled(message.EventId));
-            reason = SubscriptionEnded.CanceledInStripe;
-        }
-
+        var ended = await SubscriptionEnding.EndAsync(subscription, paymentFailed.Value, message.EventId, session, stripe, ct);
         logger.LogWarning("Subscription {SubscriptionId} ({StripeSubscriptionId}) ended: {Reason}",
-            subscription.Id, stripeSubscriptionId, reason);
+            subscription.Id, stripeSubscriptionId, ended.Reason);
+        return ended;
+    }
 
-        return new SubscriptionEnded(subscription.Id, subscription.UserId, stripeSubscriptionId, reason);
+    /// <summary>
+    /// The Stripe subscription the event is about. An invoice names it in parent.subscription_details (API version
+    /// 2025-03-31 and later) or, when the webhook endpoint uses an older API version, in "subscription", which the typed
+    /// object no longer has; the raw JSON is read for that case.
+    /// </summary>
+    private static string? SubscriptionIdOf(Event stripeEvent, string json)
+    {
+        switch (stripeEvent.Data.Object)
+        {
+            case Stripe.Subscription subscription:
+                return subscription.Id;
+            case Invoice { Parent.SubscriptionDetails.SubscriptionId: { Length: > 0 } id }:
+                return id;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("data", out var data) || !data.TryGetProperty("object", out var obj)
+            || !obj.TryGetProperty("subscription", out var subscriptionId))
+            return null;
+
+        return subscriptionId.ValueKind switch
+        {
+            JsonValueKind.String => subscriptionId.GetString(),
+            JsonValueKind.Object when subscriptionId.TryGetProperty("id", out var id) => id.GetString(),
+            _ => null
+        };
     }
 }

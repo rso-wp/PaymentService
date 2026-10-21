@@ -30,8 +30,29 @@ public interface IStripeGateway
         Guid subscriptionId, string stripeCustomerId, string stripePriceId, string paymentMethodId,
         IReadOnlyDictionary<string, string> metadata, CancellationToken ct);
 
+    /// <summary>
+    /// The Stripe subscription created for our <paramref name="subscriptionId"/> (metadata <see cref="SubscriptionIdMetadata"/>),
+    /// or null if Stripe has none: tells whether a call whose answer was lost reached Stripe.
+    /// </summary>
+    Task<string?> FindSubscriptionAsync(string stripeCustomerId, Guid subscriptionId, CancellationToken ct);
+
+    /// <summary>The subscription's Stripe status (<see cref="StripeSubscriptionStatus"/>); canceled if Stripe does not know it.</summary>
+    Task<string> GetSubscriptionStatusAsync(string stripeSubscriptionId, CancellationToken ct);
+
     /// <summary>Cancels the subscription immediately. A subscription Stripe does not know is treated as cancelled.</summary>
     Task CancelSubscriptionAsync(string stripeSubscriptionId, CancellationToken ct);
+
+    /// <summary>Metadata key on every Stripe subscription: our subscription id (the Marten stream id).</summary>
+    public const string SubscriptionIdMetadata = "subscription_id";
+}
+
+/// <summary>Stripe's subscription.status values this service acts on.</summary>
+public static class StripeSubscriptionStatus
+{
+    public const string Canceled = "canceled";
+
+    /// <summary>A renewal was not paid. Policy: the first failed payment ends the subscription.</summary>
+    public static bool IsUnpaid(string status) => status is "past_due" or "unpaid" or "incomplete_expired";
 }
 
 public class StripeGateway(
@@ -112,6 +133,29 @@ public class StripeGateway(
         }
     }
 
+    public async Task<string?> FindSubscriptionAsync(string stripeCustomerId, Guid subscriptionId, CancellationToken ct)
+    {
+        var options = new SubscriptionListOptions { Customer = stripeCustomerId, Status = "all", Limit = 100 };
+        await foreach (var subscription in subscriptions.ListAutoPagingAsync(options, cancellationToken: ct))
+        {
+            if (subscription.Metadata?.GetValueOrDefault(IStripeGateway.SubscriptionIdMetadata) == subscriptionId.ToString())
+                return subscription.Id;
+        }
+        return null;
+    }
+
+    public async Task<string> GetSubscriptionStatusAsync(string stripeSubscriptionId, CancellationToken ct)
+    {
+        try
+        {
+            return (await subscriptions.GetAsync(stripeSubscriptionId, cancellationToken: ct)).Status;
+        }
+        catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing")
+        {
+            return StripeSubscriptionStatus.Canceled;
+        }
+    }
+
     public async Task CancelSubscriptionAsync(string stripeSubscriptionId, CancellationToken ct)
     {
         try
@@ -162,10 +206,20 @@ public class FakeCard
     public DateTime CreatedAt { get; set; }
 }
 
+/// <summary>Fake Stripe subscription (Marten document), only used by <see cref="FakeStripeGateway"/>.</summary>
+public class FakeSubscription
+{
+    public required string Id { get; set; }
+    public required string CustomerId { get; set; }
+    public Guid SubscriptionId { get; set; }
+    public required string Status { get; set; }
+}
+
 /// <summary>
 /// Development only (Stripe:UseFake). Cards are added through <c>POST /payment-methods/fake</c> and stored in Marten.
 /// Subscriptions succeed, except with a card ending in 0002 (Stripe's generic-decline test card) or the price id
-/// <see cref="DeclinedPriceId"/>, which are declined so the fail-fast path can be tried.
+/// <see cref="DeclinedPriceId"/>, which are declined so the fail-fast path can be tried. Subscriptions are kept too, so
+/// lost answers and the reconciliation can be tried (set a document's Status to "unpaid" to fake a failed renewal).
 /// </summary>
 public class FakeStripeGateway(IDocumentStore store, ILogger<FakeStripeGateway> logger) : IStripeGateway
 {
@@ -219,17 +273,50 @@ public class FakeStripeGateway(IDocumentStore store, ILogger<FakeStripeGateway> 
         Guid subscriptionId, string stripeCustomerId, string stripePriceId, string paymentMethodId,
         IReadOnlyDictionary<string, string> metadata, CancellationToken ct)
     {
+        // Like Stripe's idempotency key: a repeated call for the same subscription gets the same one back.
+        if (await FindSubscriptionAsync(stripeCustomerId, subscriptionId, ct) is { } existing) return existing;
+
         var card = await GetCardAsync(stripeCustomerId, paymentMethodId, ct);
         if (stripePriceId == DeclinedPriceId || card?.Last4 == "0002")
             throw new StripeGatewayException("Your card was declined.");
 
+        var subscription = new FakeSubscription
+        {
+            Id = "sub_fake_" + RandomNumberGenerator.GetString("abcdefghijklmnopqrstuvwxyz0123456789", 20),
+            CustomerId = stripeCustomerId,
+            SubscriptionId = subscriptionId,
+            Status = "active"
+        };
+        await using var session = store.LightweightSession();
+        session.Insert(subscription);
+        await session.SaveChangesAsync(ct);
+
         logger.LogInformation("FAKE Stripe: subscription for {Customer} on {Price}", stripeCustomerId, stripePriceId);
-        return "sub_fake_" + RandomNumberGenerator.GetString("abcdefghijklmnopqrstuvwxyz0123456789", 20);
+        return subscription.Id;
     }
 
-    public Task CancelSubscriptionAsync(string stripeSubscriptionId, CancellationToken ct)
+    public async Task<string?> FindSubscriptionAsync(string stripeCustomerId, Guid subscriptionId, CancellationToken ct)
+    {
+        await using var session = store.QuerySession();
+        return (await session.Query<FakeSubscription>()
+            .FirstOrDefaultAsync(s => s.CustomerId == stripeCustomerId && s.SubscriptionId == subscriptionId, ct))?.Id;
+    }
+
+    public async Task<string> GetSubscriptionStatusAsync(string stripeSubscriptionId, CancellationToken ct)
+    {
+        await using var session = store.QuerySession();
+        // Subscriptions faked before they were kept are unknown: treat them as running rather than end them.
+        return (await session.LoadAsync<FakeSubscription>(stripeSubscriptionId, ct))?.Status ?? "active";
+    }
+
+    public async Task CancelSubscriptionAsync(string stripeSubscriptionId, CancellationToken ct)
     {
         logger.LogInformation("FAKE Stripe: cancel {Subscription}", stripeSubscriptionId);
-        return Task.CompletedTask;
+
+        await using var session = store.LightweightSession();
+        if (await session.LoadAsync<FakeSubscription>(stripeSubscriptionId, ct) is not { } subscription) return;
+        subscription.Status = StripeSubscriptionStatus.Canceled;
+        session.Store(subscription);
+        await session.SaveChangesAsync(ct);
     }
 }

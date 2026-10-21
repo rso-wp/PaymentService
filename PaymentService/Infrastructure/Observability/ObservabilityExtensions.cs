@@ -15,7 +15,7 @@ namespace PaymentService.Infrastructure.Observability;
 public static class ObservabilityExtensions
 {
     private const string LiveTag = "live";
-    private const string ReadyTag = "ready";
+    public const string ReadyTag = "ready";
 
     /// <summary>
     /// live = the process answers (restart it if not). ready = it can do its job: Postgres must work; NATS down only

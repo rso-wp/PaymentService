@@ -60,7 +60,7 @@ public class UserCreatedConsumer(
                     ?? throw new InvalidOperationException("Empty UserCreated message.");
 
                 using var scope = scopes.CreateScope();
-                var customers = scope.ServiceProvider.GetRequiredService<StripeCustomerResolver>();
+                var customers = scope.ServiceProvider.GetRequiredService<IStripeCustomerResolver>();
                 var stripeCustomerId = await customers.GetOrCreateStripeCustomerIdAsync(e.UserId, e.Email, ct);
 
                 logger.LogInformation("User {UserId} has Stripe customer {StripeCustomerId}", e.UserId, stripeCustomerId);

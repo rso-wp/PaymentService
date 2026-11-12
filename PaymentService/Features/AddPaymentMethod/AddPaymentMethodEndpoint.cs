@@ -17,7 +17,7 @@ public static class AddPaymentMethodEndpoint
     {
         app.MapPost("/payment-methods/setup-intent", async (
                 ClaimsPrincipal user,
-                StripeCustomerResolver customers,
+                IStripeCustomerResolver customers,
                 SetupIntentService setupIntents,
                 CancellationToken ct) =>
             {

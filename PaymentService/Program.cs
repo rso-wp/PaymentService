@@ -21,7 +21,7 @@ builder.Services.AddStripeIntegration(builder.Configuration, builder.Environment
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddFrontendCors(builder.Configuration);
 builder.Services.AddGrpc();
-builder.Services.AddScoped<StripeCustomerResolver>();
+builder.Services.AddScoped<IStripeCustomerResolver, StripeCustomerResolver>();
 builder.Services.AddNats(builder.Configuration);
 builder.Services.AddServiceHealthChecks<PaymentDbContext>();
 builder.Services.AddObservability("payment-service");

@@ -5,7 +5,12 @@ using PaymentService.Infrastructure.StripeIntegration;
 
 namespace PaymentService.Features.Customers;
 
-public class StripeCustomerResolver(PaymentDbContext db, IStripeGateway stripe)
+public interface IStripeCustomerResolver
+{
+    Task<string> GetOrCreateStripeCustomerIdAsync(Guid userId, string? email, CancellationToken ct);
+}
+
+public class StripeCustomerResolver(PaymentDbContext db, IStripeGateway stripe) : IStripeCustomerResolver
 {
     /// <summary>
     /// Returns the user's Stripe customer id, creating the Stripe customer and local row on first use. Normally the

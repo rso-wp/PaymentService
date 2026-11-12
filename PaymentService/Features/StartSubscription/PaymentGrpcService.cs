@@ -16,7 +16,7 @@ namespace PaymentService.Features.StartSubscription;
 /// </summary>
 public class PaymentGrpcService(
     IDocumentSession session,
-    StripeCustomerResolver customers,
+    IStripeCustomerResolver customers,
     IStripeGateway stripe,
     ILogger<PaymentGrpcService> logger) : Payment.PaymentBase
 {

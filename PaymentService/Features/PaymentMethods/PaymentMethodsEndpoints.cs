@@ -31,7 +31,7 @@ public static partial class PaymentMethodsEndpoints
 
         // GET /payment-methods: the user's saved cards, newest first.
         group.MapGet("", async (
-                ClaimsPrincipal user, StripeCustomerResolver customers, IStripeGateway stripe, CancellationToken ct) =>
+                ClaimsPrincipal user, IStripeCustomerResolver customers, IStripeGateway stripe, CancellationToken ct) =>
             {
                 var customerId = await customers.GetOrCreateStripeCustomerIdAsync(user.GetUserId(), user.GetEmail(), ct);
                 return Results.Ok(await stripe.ListCardsAsync(customerId, ct));
@@ -42,7 +42,7 @@ public static partial class PaymentMethodsEndpoints
         group.MapPost("/fake", async (
                 AddFakeCardRequest request,
                 ClaimsPrincipal user,
-                StripeCustomerResolver customers,
+                IStripeCustomerResolver customers,
                 IStripeGateway stripe,
                 CancellationToken ct) =>
             {

@@ -19,7 +19,7 @@ public static class ApiDocsExtensions
                     Type = SecuritySchemeType.Http,
                     Scheme = "bearer",
                     BearerFormat = "JWT",
-                    Description = "Access token from UserService (signUp / logIn)."
+                    Description = "Access token from UserService (POST /auth/signup or /auth/login)."
                 }
             };
             document.Security =

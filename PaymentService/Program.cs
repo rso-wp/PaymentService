@@ -24,7 +24,7 @@ builder.Services.AddGrpc();
 builder.Services.AddScoped<IStripeCustomerResolver, StripeCustomerResolver>();
 builder.Services.AddNats(builder.Configuration);
 builder.Services.AddServiceHealthChecks<PaymentDbContext>();
-builder.Services.AddObservability("payment-service");
+builder.Services.AddObservability("payment-service", builder.Configuration);
 builder.Services.AddApiDocs("PaymentService API");
 builder.Services.AddHostedService<UserCreatedConsumer>();
 builder.Services.AddHostedService<SubscriptionReconciler>();

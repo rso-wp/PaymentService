@@ -1,15 +1,18 @@
 using System.Text.Json;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using NATS.Net;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
 namespace PaymentService.Infrastructure.Observability;
 
 /// <summary>
-/// Health checks (<c>/health/live</c>, <c>/health/ready</c>) and OpenTelemetry metrics (<c>/metrics</c>, Prometheus format).
+/// Health checks (<c>/health/live</c>, <c>/health/ready</c>), OpenTelemetry metrics (<c>/metrics</c>, Prometheus format) and
+/// central logging (Application Insights).
 /// Kubernetes probes the health endpoints; Prometheus scrapes <c>/metrics</c> (pod annotations set by the helm chart).
 /// </summary>
 public static class ObservabilityExtensions
@@ -32,9 +35,19 @@ public static class ObservabilityExtensions
         return services;
     }
 
-    public static IServiceCollection AddObservability(this IServiceCollection services, string serviceName)
+    /// <summary>Setting (environment variable) with the Application Insights connection string. Without it nothing is exported.</summary>
+    public const string ApplicationInsightsConnectionString = "APPLICATIONINSIGHTS_CONNECTION_STRING";
+
+    /// <summary>
+    /// Metrics for Prometheus (<c>/metrics</c>) and, when <see cref="ApplicationInsightsConnectionString"/> is set, every log
+    /// written through <c>ILogger</c> to Application Insights (a Log Analytics workspace), where Grafana reads them. The
+    /// console output stays as it is, so <c>kubectl logs</c> keeps working. Locally the setting is empty and nothing leaves
+    /// the process.
+    /// </summary>
+    public static IServiceCollection AddObservability(
+        this IServiceCollection services, string serviceName, IConfiguration? configuration = null)
     {
-        services.AddOpenTelemetry()
+        var otel = services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService(serviceName))
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
@@ -42,6 +55,19 @@ public static class ObservabilityExtensions
                 .AddRuntimeInstrumentation()
                 .AddMeter("Npgsql", "Wolverine")
                 .AddPrometheusExporter());
+
+        var connectionString = configuration?[ApplicationInsightsConnectionString];
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            // The service name becomes the "role name" of every log line: filter on it in Grafana.
+            otel.WithLogging(logging => logging.AddAzureMonitorLogExporter(o => o.ConnectionString = connectionString));
+            // Without these the message arrives as its template ("User {UserId} signed up") and without the request scope.
+            services.Configure<OpenTelemetryLoggerOptions>(o =>
+            {
+                o.IncludeFormattedMessage = true;
+                o.IncludeScopes = true;
+            });
+        }
 
         return services;
     }

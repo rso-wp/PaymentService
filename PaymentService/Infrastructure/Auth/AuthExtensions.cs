@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -10,9 +9,10 @@ public static class AuthExtensions
     public const string FrontendCorsPolicy = "Frontend";
 
     /// <summary>
-    /// Bearer validation of UserService's tokens. The signing key is either configured (`Auth:SigningPublicKey`, PEM), so
-    /// validating a token never depends on UserService being up, or read from UserService's discovery document
-    /// (`Auth:MetadataAddress`, cluster-internal http) and refreshed when it changes.
+    /// Bearer validation of the access tokens Keycloak issues (it owns sign-up, log-in and passwords). Settings, section "Auth":
+    /// <c>Issuer</c> is the realm URL as the browser sees it (the token's <c>iss</c>), <c>Audience</c> the API's audience
+    /// (<c>rso-api</c>, put in the token by a Keycloak mapper), and <c>MetadataAddress</c> Keycloak's discovery document, from
+    /// which the signing keys are read and refreshed (cluster-internal http, so it can differ from <c>Issuer</c>).
     /// </summary>
     public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration configuration)
     {
@@ -32,28 +32,12 @@ public static class AuthExtensions
                     ValidAlgorithms = [SecurityAlgorithms.RsaSha256]
                 };
 
-                if (section["SigningPublicKey"] is { Length: > 0 } publicKey)
-                {
-                    options.TokenValidationParameters.IssuerSigningKey = PublicKey(publicKey);
-                }
-                else
-                {
-                    options.MetadataAddress = Required("MetadataAddress");
-                    options.RequireHttpsMetadata = false; // UserService is reached inside the cluster / on localhost
-                }
+                options.MetadataAddress = Required("MetadataAddress");
+                options.RequireHttpsMetadata = false; // Keycloak is reached inside the cluster / on localhost
             });
         services.AddAuthorization();
 
         return services;
-    }
-
-    /// <summary>The RSA public key (PEM), with the key id UserService puts in each token's `kid` (see its SigningKey).</summary>
-    private static RsaSecurityKey PublicKey(string pem)
-    {
-        var rsa = RSA.Create();
-        rsa.ImportFromPem(pem);
-        var keyId = Base64UrlEncoder.Encode(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()))[..16];
-        return new RsaSecurityKey(rsa) { KeyId = keyId };
     }
 
     public static IServiceCollection AddFrontendCors(this IServiceCollection services, IConfiguration configuration)
